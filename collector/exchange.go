@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	registerCollector("exchange", newExchangeCollector,
+	registerCollector("exchange", builderFunc(newExchangeCollector),
 		"MSExchange ADAccess Processes",
 		"MSExchangeTransport Queues",
 		"MSExchange HttpProxy",

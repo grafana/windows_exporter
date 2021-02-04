@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	registerCollector("cs", NewCSCollector)
+	registerCollector("cs", builderFunc(NewCSCollector))
 }
 
 // A CSCollector is a Prometheus collector for WMI metrics

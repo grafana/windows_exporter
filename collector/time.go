@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	registerCollector("time", newTimeCollector, "Windows Time Service")
+	registerCollector("time", builderFunc(newTimeCollector), "Windows Time Service")
 }
 
 // TimeCollector is a Prometheus collector for Perflib counter metrics

@@ -126,7 +126,7 @@ func mssqlGetPerfObjectName(sqlInstance string, collector string) string {
 }
 
 func init() {
-	registerCollector("mssql", NewMSSQLCollector)
+	registerCollector("mssql", builderFunc(NewMSSQLCollector))
 }
 
 // A MSSQLCollector is a Prometheus collector for various WMI Win32_PerfRawData_MSSQLSERVER_* metrics

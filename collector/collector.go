@@ -2,6 +2,7 @@ package collector
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"golang.org/x/sys/windows/registry"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 // ...
@@ -50,7 +52,15 @@ func getWindowsVersion() float64 {
 	return currentv_flt
 }
 
-type collectorBuilder func() (Collector, error)
+type collectorBuilder interface {
+	RegisterFlags(app *kingpin.Application)
+	Build() (Collector, error)
+}
+
+type builderFunc func() (Collector, error)
+
+func (f builderFunc) RegisterFlags(app *kingpin.Application) {}
+func (f builderFunc) Build() (Collector, error)              { return f() }
 
 var (
 	builders                = make(map[string]collectorBuilder)
@@ -70,20 +80,51 @@ func addPerfCounterDependencies(name string, perfCounterNames []string) {
 	perfCounterDependencies[name] = strings.Join(perfIndicies, " ")
 }
 
-func Available() []string {
+// Collectors is the set of supported collectors.
+type Collectors struct {
+	builders map[string]collectorBuilder
+}
+
+// NewCollectors creates a new list of collectors.
+func NewCollectors() *Collectors {
+	localBuilders := make(map[string]collectorBuilder, len(builders))
+	for k, v := range builders {
+		// If the builder is a pointer to a struct, make a copy to allow multiple
+		// concurrent sets of Collectors to be defined and configured separately.
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Ptr && rv.Elem().Kind() == reflect.Struct {
+			v = reflect.New(rv.Elem().Type()).Interface().(collectorBuilder)
+		}
+		localBuilders[k] = v
+	}
+	return &Collectors{builders: localBuilders}
+}
+
+func (c *Collectors) Available() []string {
 	cs := make([]string, 0, len(builders))
-	for c := range builders {
+	for c := range c.builders {
 		cs = append(cs, c)
 	}
 	return cs
 }
-func Build(collector string) (Collector, error) {
-	builder, exists := builders[collector]
+
+func (c *Collectors) RegisterFlags(collector string, app *kingpin.Application) error {
+	builder, exists := c.builders[collector]
+	if !exists {
+		return fmt.Errorf("Unknown collector %q", collector)
+	}
+	builder.RegisterFlags(app)
+	return nil
+}
+
+func (c *Collectors) Build(collector string) (Collector, error) {
+	builder, exists := c.builders[collector]
 	if !exists {
 		return nil, fmt.Errorf("Unknown collector %q", collector)
 	}
-	return builder()
+	return builder.Build()
 }
+
 func getPerfQuery(collectors []string) string {
 	parts := make([]string, 0, len(collectors))
 	for _, c := range collectors {
@@ -114,6 +155,7 @@ func PrepareScrapeContext(collectors []string) (*ScrapeContext, error) {
 
 	return &ScrapeContext{objs}, nil
 }
+
 func boolToFloat(b bool) float64 {
 	if b {
 		return 1.0

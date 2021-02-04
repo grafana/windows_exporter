@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	registerCollector("net", NewNetworkCollector, "Network Interface")
+	registerCollector("net", builderFunc(NewNetworkCollector), "Network Interface")
 }
 
 var (

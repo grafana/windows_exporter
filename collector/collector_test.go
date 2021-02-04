@@ -32,3 +32,16 @@ func TestExpandChildCollectors(t *testing.T) {
 		})
 	}
 }
+
+func TestNewCollectors(t *testing.T) {
+	var (
+		set1 = NewCollectors()
+		set2 = NewCollectors()
+
+		iis1 = set1.builders["iis"].(*IISCollectorConfig)
+		iis2 = set2.builders["iis"].(*IISCollectorConfig)
+	)
+	if iis1 == iis2 {
+		t.Errorf("collector config structs not copied")
+	}
+}
