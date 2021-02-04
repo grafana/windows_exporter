@@ -16,7 +16,7 @@ func init() {
 	} else {
 		deps = "Processor"
 	}
-	registerCollector("cpu", newCPUCollector, deps)
+	registerCollector("cpu", builderFunc(newCPUCollector), deps)
 }
 
 type cpuCollectorBasic struct {

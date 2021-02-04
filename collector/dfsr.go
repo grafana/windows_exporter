@@ -18,7 +18,7 @@ func init() {
 		perflibDependencies = append(perflibDependencies, dfsrGetPerfObjectName(source))
 	}
 
-	registerCollector("dfsr", NewDFSRCollector, perflibDependencies...)
+	registerCollector("dfsr", builderFunc(NewDFSRCollector), perflibDependencies...)
 }
 
 // DFSRCollector contains the metric and state data of the DFSR collectors.

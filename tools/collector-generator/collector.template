@@ -5,7 +5,7 @@ import (
     "github.com/prometheus/common/log"
 )
 func init() {
-    registerCollector("{{ .CollectorName | toLower }}", new{{ .CollectorName }}Collector) // TODO: Add any perflib dependencies here
+    registerCollector("{{ .CollectorName | toLower }}", builderFunc(new{{ .CollectorName }}Collector)) // TODO: Add any perflib dependencies here
 }
 // A {{ .CollectorName }}Collector is a Prometheus collector for WMI {{ .Class }} metrics
 type {{ .CollectorName }}Collector struct {

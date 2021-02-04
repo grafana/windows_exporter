@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	registerCollector("logical_disk", NewLogicalDiskCollector, "LogicalDisk")
+	registerCollector("logical_disk", builderFunc(NewLogicalDiskCollector), "LogicalDisk")
 }
 
 var (

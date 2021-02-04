@@ -224,12 +224,12 @@ func expandEnabledCollectors(enabled string) []string {
 	return result
 }
 
-func loadCollectors(list string) (map[string]collector.Collector, error) {
+func loadCollectors(set *collector.Collectors, list string) (map[string]collector.Collector, error) {
 	collectors := map[string]collector.Collector{}
 	enabled := expandEnabledCollectors(list)
 
 	for _, name := range enabled {
-		c, err := collector.Build(name)
+		c, err := set.Build(name)
 		if err != nil {
 			return nil, err
 		}
@@ -288,6 +288,15 @@ func main() {
 	kingpin.Version(version.Print("windows_exporter"))
 	kingpin.HelpFlag.Short('h')
 
+	set := collector.NewCollectors()
+
+	for _, c := range set.Available() {
+		err := set.RegisterFlags(c, kingpin.CommandLine)
+		if err != nil {
+			log.Fatalf("Couldn't load collectors: %s", err)
+		}
+	}
+
 	// Load values from configuration file(s). Executable flags must first be parsed, in order
 	// to load the specified file(s).
 	kingpin.Parse()
@@ -306,7 +315,7 @@ func main() {
 	}
 
 	if *printCollectors {
-		collectors := collector.Available()
+		collectors := set.Available()
 		collectorNames := make(sort.StringSlice, 0, len(collectors))
 		for _, n := range collectors {
 			collectorNames = append(collectorNames, n)
@@ -336,7 +345,7 @@ func main() {
 		}()
 	}
 
-	collectors, err := loadCollectors(*enabledCollectors)
+	collectors, err := loadCollectors(set, *enabledCollectors)
 	if err != nil {
 		log.Fatalf("Couldn't load collectors: %s", err)
 	}

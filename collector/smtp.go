@@ -4,15 +4,16 @@ package collector
 
 import (
 	"fmt"
+	"regexp"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"gopkg.in/alecthomas/kingpin.v2"
-	"regexp"
 )
 
 func init() {
-	log.Info("smtp collector is in an experimental state! Metrics for this collector have not been tested.")
-	registerCollector("smtp", NewSMTPCollector, "SMTP Server")
+	log.Info("smtp collector is in an experimental state! Metrics for this collector have not been testedb.")
+	registerCollector("smtp", builderFunc(NewSMTPCollector), "SMTP Server")
 }
 
 var (

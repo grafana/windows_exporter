@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	registerCollector("dhcp", NewDhcpCollector, "DHCP Server")
+	registerCollector("dhcp", builderFunc(NewDhcpCollector), "DHCP Server")
 }
 
 // A DhcpCollector is a Prometheus collector perflib DHCP metrics

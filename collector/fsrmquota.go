@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	registerCollector("fsrmquota", newFSRMQuotaCollector)
+	registerCollector("fsrmquota", builderFunc(newFSRMQuotaCollector))
 }
 
 type FSRMQuotaCollector struct {
