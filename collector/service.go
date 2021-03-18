@@ -13,15 +13,23 @@ import (
 )
 
 func init() {
-	registerCollector("service", NewserviceCollector)
+	registerCollectorWithConfig("service", func() Config { return &ServiceConfig{} })
 }
 
-var (
-	serviceWhereClause = kingpin.Flag(
+type ServiceConfig struct {
+	ServiceWhereClause string
+}
+
+func (s *ServiceConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag(
 		"collector.service.services-where",
 		"WQL 'where' clause to use in WMI metrics query. Limits the response to the services you specify and reduces the size of the response.",
-	).Default("").String()
-)
+	).Default("").StringVar(&s.ServiceWhereClause)
+}
+
+func (s *ServiceConfig) Build() (Collector, error) {
+	return NewserviceCollector(s)
+}
 
 // A serviceCollector is a Prometheus collector for WMI Win32_Service metrics
 type serviceCollector struct {
@@ -34,10 +42,10 @@ type serviceCollector struct {
 }
 
 // NewserviceCollector ...
-func NewserviceCollector() (Collector, error) {
+func NewserviceCollector(s *ServiceConfig) (Collector, error) {
 	const subsystem = "service"
 
-	if *serviceWhereClause == "" {
+	if s.ServiceWhereClause == "" {
 		log.Warn("No where-clause specified for service collector. This will generate a very large number of metrics!")
 	}
 
@@ -66,7 +74,7 @@ func NewserviceCollector() (Collector, error) {
 			[]string{"name", "status"},
 			nil,
 		),
-		queryWhereClause: *serviceWhereClause,
+		queryWhereClause: s.ServiceWhereClause,
 	}, nil
 }
 

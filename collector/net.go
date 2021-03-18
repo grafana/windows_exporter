@@ -12,20 +12,30 @@ import (
 )
 
 func init() {
-	registerCollector("net", NewNetworkCollector, "Network Interface")
+	registerCollectorWithConfig("net", func() Config { return &NetworkConfig{} }, "Network Interface")
 }
 
-var (
-	nicWhitelist = kingpin.Flag(
+var nicNameToUnderscore = regexp.MustCompile("[^a-zA-Z0-9]")
+
+type NetworkConfig struct {
+	NICWhiteList string
+	NICBlackList string
+}
+
+func (n *NetworkConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag(
 		"collector.net.nic-whitelist",
 		"Regexp of NIC:s to whitelist. NIC name must both match whitelist and not match blacklist to be included.",
-	).Default(".+").String()
-	nicBlacklist = kingpin.Flag(
+	).Default(".+").StringVar(&n.NICWhiteList)
+	ka.Flag(
 		"collector.net.nic-blacklist",
 		"Regexp of NIC:s to blacklist. NIC name must both match whitelist and not match blacklist to be included.",
-	).Default("").String()
-	nicNameToUnderscore = regexp.MustCompile("[^a-zA-Z0-9]")
-)
+	).Default("").StringVar(&n.NICBlackList)
+}
+
+func (n *NetworkConfig) Build() (Collector, error) {
+	return NewNetworkCollector(n)
+}
 
 // A NetworkCollector is a Prometheus collector for Perflib Network Interface metrics
 type NetworkCollector struct {
@@ -47,7 +57,7 @@ type NetworkCollector struct {
 }
 
 // NewNetworkCollector ...
-func NewNetworkCollector() (Collector, error) {
+func NewNetworkCollector(n *NetworkConfig) (Collector, error) {
 	const subsystem = "net"
 
 	return &NetworkCollector{
@@ -124,8 +134,8 @@ func NewNetworkCollector() (Collector, error) {
 			nil,
 		),
 
-		nicWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *nicWhitelist)),
-		nicBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *nicBlacklist)),
+		nicWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", n.NICWhiteList)),
+		nicBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", n.NICBlackList)),
 	}, nil
 }
 

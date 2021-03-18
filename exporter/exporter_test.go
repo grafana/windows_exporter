@@ -1,6 +1,6 @@
 // +build windows
 
-package main
+package exporter
 
 import (
 	"sort"
@@ -47,5 +47,18 @@ func TestExpandEnabled(t *testing.T) {
 		if !success {
 			t.Error("For", testCase.input, "expected", testCase.expectedOutput, "got", output)
 		}
+	}
+}
+
+func TestNewCollector(t *testing.T) {
+	//collector.iis.site-whitelist
+	config :=
+		`---
+collector:
+  iis:
+    site-whitelist: test `
+	_, err := NewWindowsCollector("iis", config)
+	if err != nil {
+		t.Error("Error in TestNewcollector creating collector with error ", err)
 	}
 }

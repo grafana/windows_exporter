@@ -58,6 +58,24 @@ func NewResolver(file string) (*Resolver, error) {
 	return &Resolver{flags: flags}, nil
 }
 
+// NewResolver returns a Resolver structure.
+func NewResolverFromString(config string) (*Resolver, error) {
+	flags := map[string]string{}
+	var rawValues map[string]interface{}
+	err := yaml.Unmarshal([]byte(config), &rawValues)
+	if err != nil {
+		return nil, err
+	}
+	// Flatten nested YAML values
+	flattenedValues := flatten(rawValues)
+	for k, v := range flattenedValues {
+		if _, ok := flags[k]; !ok {
+			flags[k] = v
+		}
+	}
+	return &Resolver{flags: flags}, nil
+}
+
 func (c *Resolver) setDefault(v getFlagger) {
 	for name, value := range c.flags {
 		f := v.GetFlag(name)
