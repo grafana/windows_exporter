@@ -16,19 +16,19 @@ func init() {
 }
 
 type LogicalDiskConfig struct {
-	volumeWhiteList string
-	volumeBlackList string
+	VolumeWhiteList string
+	VolumeBlackList string
 }
 
 func (l *LogicalDiskConfig) RegisterKingpin(ka *kingpin.Application) {
 	ka.Flag(
 		"collector.logical_disk.volume-whitelist",
 		"Regexp of volumes to whitelist. Volume name must both match whitelist and not match blacklist to be included.",
-	).Default(".+").StringVar(&l.volumeWhiteList)
+	).Default(".+").StringVar(&l.VolumeWhiteList)
 	ka.Flag(
 		"collector.logical_disk.volume-blacklist",
 		"Regexp of volumes to blacklist. Volume name must both match whitelist and not match blacklist to be included.",
-	).Default("").StringVar(&l.volumeBlackList)
+	).Default("").StringVar(&l.VolumeBlackList)
 }
 
 func (l *LogicalDiskConfig) Build() (Collector, error) {
@@ -159,8 +159,8 @@ func NewLogicalDiskCollector(l *LogicalDiskConfig) (Collector, error) {
 			nil,
 		),
 
-		volumeWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", l.volumeWhiteList)),
-		volumeBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", l.volumeBlackList)),
+		volumeWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", l.VolumeWhiteList)),
+		volumeBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", l.VolumeBlackList)),
 	}, nil
 }
 
