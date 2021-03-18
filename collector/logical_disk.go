@@ -1,4 +1,4 @@
-// +build ignore
+// +build windows
 
 package collector
 
@@ -12,19 +12,28 @@ import (
 )
 
 func init() {
-	registerCollector("logical_disk", NewLogicalDiskCollector, "LogicalDisk")
+	registerCollectorWithConfig("logical_disk", func() Config { return &LogicalDiskConfig{} }, "LogicalDisk")
 }
 
-var (
-	volumeWhitelist = kingpin.Flag(
+type LogicalDiskConfig struct {
+	volumeWhiteList string
+	volumeBlackList string
+}
+
+func (l *LogicalDiskConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag(
 		"collector.logical_disk.volume-whitelist",
 		"Regexp of volumes to whitelist. Volume name must both match whitelist and not match blacklist to be included.",
-	).Default(".+").String()
-	volumeBlacklist = kingpin.Flag(
+	).Default(".+").StringVar(&l.volumeWhiteList)
+	ka.Flag(
 		"collector.logical_disk.volume-blacklist",
 		"Regexp of volumes to blacklist. Volume name must both match whitelist and not match blacklist to be included.",
-	).Default("").String()
-)
+	).Default("").StringVar(&l.volumeBlackList)
+}
+
+func (l *LogicalDiskConfig) Build() (Collector, error) {
+	return NewLogicalDiskCollector(l)
+}
 
 // A LogicalDiskCollector is a Prometheus collector for perflib logicalDisk metrics
 type LogicalDiskCollector struct {
@@ -48,7 +57,7 @@ type LogicalDiskCollector struct {
 }
 
 // NewLogicalDiskCollector ...
-func NewLogicalDiskCollector() (Collector, error) {
+func NewLogicalDiskCollector(l *LogicalDiskConfig) (Collector, error) {
 	const subsystem = "logical_disk"
 
 	return &LogicalDiskCollector{
@@ -150,8 +159,8 @@ func NewLogicalDiskCollector() (Collector, error) {
 			nil,
 		),
 
-		volumeWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *volumeWhitelist)),
-		volumeBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *volumeBlacklist)),
+		volumeWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", l.volumeWhiteList)),
+		volumeBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", l.volumeBlackList)),
 	}, nil
 }
 

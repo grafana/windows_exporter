@@ -1,4 +1,4 @@
-// +build ignore
+// +build windows
 
 package collector
 
@@ -15,19 +15,28 @@ import (
 )
 
 func init() {
-	registerCollector("process", newProcessCollector, "Process")
+	registerCollectorWithConfig("process", func() Config { return &ProcessConfig{} }, "Process")
 }
 
-var (
-	processWhitelist = kingpin.Flag(
+type ProcessConfig struct {
+	ProcessWhiteList string
+	ProcessBlackList string
+}
+
+func (p *ProcessConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag(
 		"collector.process.whitelist",
 		"Regexp of processes to include. Process name must both match whitelist and not match blacklist to be included.",
-	).Default(".*").String()
-	processBlacklist = kingpin.Flag(
+	).Default(".*").StringVar(&p.ProcessWhiteList)
+	ka.Flag(
 		"collector.process.blacklist",
 		"Regexp of processes to exclude. Process name must both match whitelist and not match blacklist to be included.",
-	).Default("").String()
-)
+	).Default("").StringVar(&p.ProcessBlackList)
+}
+
+func (p *ProcessConfig) Build() (Collector, error) {
+	return newProcessCollector(p)
+}
 
 type processCollector struct {
 	StartTime         *prometheus.Desc
@@ -49,10 +58,10 @@ type processCollector struct {
 }
 
 // NewProcessCollector ...
-func newProcessCollector() (Collector, error) {
+func newProcessCollector(p *ProcessConfig) (Collector, error) {
 	const subsystem = "process"
 
-	if *processWhitelist == ".*" && *processBlacklist == "" {
+	if p.ProcessWhiteList == ".*" && p.ProcessBlackList == "" {
 		log.Warn("No filters specified for process collector. This will generate a very large number of metrics!")
 	}
 
@@ -135,8 +144,8 @@ func newProcessCollector() (Collector, error) {
 			[]string{"process", "process_id", "creating_process_id"},
 			nil,
 		),
-		processWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *processWhitelist)),
-		processBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *processBlacklist)),
+		processWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", p.ProcessWhiteList)),
+		processBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", p.ProcessBlackList)),
 	}, nil
 }
 
