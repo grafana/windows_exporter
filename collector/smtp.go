@@ -1,4 +1,4 @@
-// +build ignore
+// +build windows
 
 package collector
 
@@ -12,13 +12,28 @@ import (
 
 func init() {
 	log.Info("smtp collector is in an experimental state! Metrics for this collector have not been tested.")
-	registerCollector("smtp", NewSMTPCollector, "SMTP Server")
+	registerCollectorWithConfig("smtp", func() Config { return &SMTPConfig{} }, "SMTP Server")
 }
 
-var (
-	serverWhitelist = kingpin.Flag("collector.smtp.server-whitelist", "Regexp of virtual servers to whitelist. Server name must both match whitelist and not match blacklist to be included.").Default(".+").String()
-	serverBlacklist = kingpin.Flag("collector.smtp.server-blacklist", "Regexp of virtual servers to blacklist. Server name must both match whitelist and not match blacklist to be included.").String()
-)
+type SMTPConfig struct {
+	ServerWhiteList string
+	ServerBlackList string
+}
+
+func (s *SMTPConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag(
+		"collector.smtp.server-whitelist",
+		"Regexp of virtual servers to whitelist. Server name must both match whitelist and not match blacklist to be included.",
+	).Default(".+").StringVar(&s.ServerWhiteList)
+	ka.Flag(
+		"collector.smtp.server-blacklist",
+		"Regexp of virtual servers to blacklist. Server name must both match whitelist and not match blacklist to be included.",
+	).StringVar(&s.ServerBlackList)
+}
+
+func (s *SMTPConfig) Build() (Collector, error) {
+	return NewSMTPCollector(s)
+}
 
 type SMTPCollector struct {
 	BadmailedMessagesBadPickupFileTotal     *prometheus.Desc
@@ -68,7 +83,7 @@ type SMTPCollector struct {
 	serverBlacklistPattern *regexp.Regexp
 }
 
-func NewSMTPCollector() (Collector, error) {
+func NewSMTPCollector(s *SMTPConfig) (Collector, error) {
 	const subsystem = "smtp"
 
 	return &SMTPCollector{
@@ -325,8 +340,8 @@ func NewSMTPCollector() (Collector, error) {
 			nil,
 		),
 
-		serverWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *serverWhitelist)),
-		serverBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *serverBlacklist)),
+		serverWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", s.ServerWhiteList)),
+		serverBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", s.ServerBlackList)),
 	}, nil
 }
 
