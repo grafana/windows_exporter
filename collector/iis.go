@@ -7,17 +7,34 @@ import (
 	"fmt"
 	"regexp"
 
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	"golang.org/x/sys/windows/registry"
 
 	"github.com/StackExchange/wmi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func init() {
-	registerCollector("iis", NewIISCollector)
+	registerCollectorWithConfig("iis", func() Config { return &IISConfig{} })
 }
+
+type IISConfig struct {
+	SiteWhiteList string
+	SiteBlackList string
+	AppWhiteList  string
+	AppBlackList  string
+}
+
+func (c *IISConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag("collector.iis.site-whitelist", "Regexp of sites to whitelist. Site name must both match whitelist and not match blacklist to be included.").Default(".+").StringVar(&c.SiteWhiteList)
+	ka.Flag("collector.iis.site-blacklist", "Regexp of sites to blacklist. Site name must both match whitelist and not match blacklist to be included.").StringVar(&c.SiteBlackList)
+	ka.Flag("collector.iis.app-whitelist", "Regexp of apps to whitelist. App name must both match whitelist and not match blacklist to be included.").Default(".+").StringVar(&c.AppWhiteList)
+	ka.Flag("collector.iis.app-blacklist", "Regexp of apps to blacklist. App name must both match whitelist and not match blacklist to be included.").StringVar(&c.AppBlackList)
+}
+
+func (c *IISConfig) Build() (Collector, error) { return NewIISCollector(c) }
 
 type simple_version struct {
 	major uint64
@@ -55,13 +72,6 @@ func getIISVersion() simple_version {
 		minor: minor,
 	}
 }
-
-var (
-	siteWhitelist = kingpin.Flag("collector.iis.site-whitelist", "Regexp of sites to whitelist. Site name must both match whitelist and not match blacklist to be included.").Default(".+").String()
-	siteBlacklist = kingpin.Flag("collector.iis.site-blacklist", "Regexp of sites to blacklist. Site name must both match whitelist and not match blacklist to be included.").String()
-	appWhitelist  = kingpin.Flag("collector.iis.app-whitelist", "Regexp of apps to whitelist. App name must both match whitelist and not match blacklist to be included.").Default(".+").String()
-	appBlacklist  = kingpin.Flag("collector.iis.app-blacklist", "Regexp of apps to blacklist. App name must both match whitelist and not match blacklist to be included.").String()
-)
 
 type IISCollector struct {
 	CurrentAnonymousUsers         *prometheus.Desc
@@ -192,7 +202,7 @@ type IISCollector struct {
 }
 
 // NewIISCollector ...
-func NewIISCollector() (Collector, error) {
+func NewIISCollector(c *IISConfig) (Collector, error) {
 	const subsystem = "iis"
 
 	buildIIS := &IISCollector{
@@ -326,9 +336,6 @@ func NewIISCollector() (Collector, error) {
 			[]string{"site"},
 			nil,
 		),
-
-		siteWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *siteWhitelist)),
-		siteBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *siteBlacklist)),
 
 		// App Pools
 		// Guages
@@ -806,11 +813,12 @@ func NewIISCollector() (Collector, error) {
 			nil,
 			nil,
 		),
-
-		appWhitelistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *appWhitelist)),
-		appBlacklistPattern: regexp.MustCompile(fmt.Sprintf("^(?:%s)$", *appBlacklist)),
 	}
+	buildIIS.siteWhitelistPattern = regexp.MustCompile(fmt.Sprintf("^(?:%s)$", c.SiteWhiteList))
+	buildIIS.siteBlacklistPattern = regexp.MustCompile(fmt.Sprintf("^(?:%s)$", c.SiteBlackList))
 
+	buildIIS.appWhitelistPattern = regexp.MustCompile(fmt.Sprintf("^(?:%s)$", c.AppWhiteList))
+	buildIIS.appBlacklistPattern = regexp.MustCompile(fmt.Sprintf("^(?:%s)$", c.AppBlackList))
 	buildIIS.iis_version = getIISVersion()
 
 	return buildIIS, nil
@@ -818,7 +826,7 @@ func NewIISCollector() (Collector, error) {
 
 // Collect sends the metric values for each metric
 // to the provided prometheus Metric channel.
-func (c *IISCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
+func (c *IISCollector) Collect(_ *ScrapeContext, ch chan<- prometheus.Metric) error {
 	if desc, err := c.collect(ch); err != nil {
 		log.Error("failed collecting iis metrics:", desc, err)
 		return err

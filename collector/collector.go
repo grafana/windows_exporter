@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	"github.com/leoluk/perflib_exporter/perflib"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
@@ -50,15 +52,27 @@ func getWindowsVersion() float64 {
 	return currentv_flt
 }
 
+type Config interface {
+	RegisterKingpin(ka *kingpin.Application)
+	Build() (Collector, error)
+}
+
+type configBuilder func() Config
 type collectorBuilder func() (Collector, error)
 
 var (
 	builders                = make(map[string]collectorBuilder)
 	perfCounterDependencies = make(map[string]string)
+	configBuilders          = make(map[string]configBuilder)
 )
 
 func registerCollector(name string, builder collectorBuilder, perfCounterNames ...string) {
 	builders[name] = builder
+	addPerfCounterDependencies(name, perfCounterNames)
+}
+
+func registerCollectorWithConfig(name string, config configBuilder, perfCounterNames ...string) {
+	configBuilders[name] = config
 	addPerfCounterDependencies(name, perfCounterNames)
 }
 
@@ -71,12 +85,16 @@ func addPerfCounterDependencies(name string, perfCounterNames []string) {
 }
 
 func Available() []string {
-	cs := make([]string, 0, len(builders))
+	cs := make([]string, 0, len(builders)+len(configBuilders))
 	for c := range builders {
+		cs = append(cs, c)
+	}
+	for c := range configBuilders {
 		cs = append(cs, c)
 	}
 	return cs
 }
+
 func Build(collector string) (Collector, error) {
 	builder, exists := builders[collector]
 	if !exists {
@@ -84,6 +102,7 @@ func Build(collector string) (Collector, error) {
 	}
 	return builder()
 }
+
 func getPerfQuery(collectors []string) string {
 	parts := make([]string, 0, len(collectors))
 	for _, c := range collectors {
@@ -114,6 +133,7 @@ func PrepareScrapeContext(collectors []string) (*ScrapeContext, error) {
 
 	return &ScrapeContext{objs}, nil
 }
+
 func boolToFloat(b bool) float64 {
 	if b {
 		return 1.0
@@ -147,4 +167,14 @@ func expandEnabledChildCollectors(enabled string) []string {
 	// Ensure result is ordered, to prevent test failure
 	sort.Strings(result)
 	return result
+}
+
+func GenerateConfigs(ka *kingpin.Application) map[string]Config {
+	cm := make(map[string]Config, len(configBuilders))
+	for k, v := range configBuilders {
+		c := v()
+		c.RegisterKingpin(ka)
+		cm[k] = c
+	}
+	return cm
 }

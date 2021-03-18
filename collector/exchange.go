@@ -7,13 +7,26 @@ import (
 	"os"
 	"strings"
 
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+type ExchangeConfig struct {
+	List    bool
+	Enabled string
+}
+
+func (e *ExchangeConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag("collectors.exchange.list", "List the collectors along with their perflib object name/ids").BoolVar(&e.List)
+	ka.Flag("collectors.exchange.enabled", "Comma-separated List of collectors to use. Defaults to all, if not specified.").StringVar(&e.Enabled)
+}
+
+func (e *ExchangeConfig) Build() (Collector, error) { return newExchangeCollector(e) }
+
 func init() {
-	registerCollector("exchange", newExchangeCollector,
+	registerCollectorWithConfig("exchange", func() Config { return &ExchangeConfig{} },
 		"MSExchange ADAccess Processes",
 		"MSExchangeTransport Queues",
 		"MSExchange HttpProxy",
@@ -66,6 +79,21 @@ type exchangeCollector struct {
 	UserCount                               *prometheus.Desc
 
 	enabledCollectors []string
+
+	ArgExchangeListAllCollectors bool
+	ArgExchangeCollectorsEnabled string
+}
+
+var collectorDesc = map[string]string{
+	"ADAccessProcesses":   "[19108] MSExchange ADAccess Processes",
+	"TransportQueues":     "[20524] MSExchangeTransport Queues",
+	"HttpProxy":           "[36934] MSExchange HttpProxy",
+	"ActiveSync":          "[25138] MSExchange ActiveSync",
+	"AvailabilityService": "[24914] MSExchange Availability Service",
+	"OutlookWebAccess":    "[24618] MSExchange OWA",
+	"Autodiscover":        "[29240] MSExchange Autodiscover",
+	"WorkloadManagement":  "[19430] MSExchange WorkloadManagement Workloads",
+	"RpcClientAccess":     "[29336] MSExchange RpcClientAccess",
 }
 
 var (
@@ -81,21 +109,17 @@ var (
 		"WorkloadManagement",
 		"RpcClientAccess",
 	}
-
-	argExchangeListAllCollectors = kingpin.Flag(
-		"collectors.exchange.list",
-		"List the collectors along with their perflib object name/ids",
-	).Bool()
-
-	argExchangeCollectorsEnabled = kingpin.Flag(
-		"collectors.exchange.enabled",
-		"Comma-separated list of collectors to use. Defaults to all, if not specified.",
-	).Default("").String()
 )
 
 // newExchangeCollector returns a new Collector
-func newExchangeCollector() (Collector, error) {
-
+func newExchangeCollector(config *ExchangeConfig) (Collector, error) {
+	if config.List {
+		fmt.Printf("%-32s %-32s\n", "Collector Name", "[PerfID] Perflib Object")
+		for _, cname := range exchangeAllCollectorNames {
+			fmt.Printf("%-32s %-32s\n", cname, collectorDesc[cname])
+		}
+		os.Exit(0)
+	}
 	// desc creates a new prometheus description
 	desc := func(metricName string, description string, labels ...string) *prometheus.Desc {
 		return prometheus.NewDesc(
@@ -147,41 +171,19 @@ func newExchangeCollector() (Collector, error) {
 
 		enabledCollectors: make([]string, 0, len(exchangeAllCollectorNames)),
 	}
-
-	collectorDesc := map[string]string{
-		"ADAccessProcesses":   "[19108] MSExchange ADAccess Processes",
-		"TransportQueues":     "[20524] MSExchangeTransport Queues",
-		"HttpProxy":           "[36934] MSExchange HttpProxy",
-		"ActiveSync":          "[25138] MSExchange ActiveSync",
-		"AvailabilityService": "[24914] MSExchange Availability Service",
-		"OutlookWebAccess":    "[24618] MSExchange OWA",
-		"Autodiscover":        "[29240] MSExchange Autodiscover",
-		"WorkloadManagement":  "[19430] MSExchange WorkloadManagement Workloads",
-		"RpcClientAccess":     "[29336] MSExchange RpcClientAccess",
-	}
-
-	if *argExchangeListAllCollectors {
-		fmt.Printf("%-32s %-32s\n", "Collector Name", "[PerfID] Perflib Object")
-		for _, cname := range exchangeAllCollectorNames {
-			fmt.Printf("%-32s %-32s\n", cname, collectorDesc[cname])
-		}
-		os.Exit(0)
-	}
-
-	if *argExchangeCollectorsEnabled == "" {
+	if config.Enabled == "" {
 		for _, collectorName := range exchangeAllCollectorNames {
 			c.enabledCollectors = append(c.enabledCollectors, collectorName)
 		}
 	} else {
-		for _, collectorName := range strings.Split(*argExchangeCollectorsEnabled, ",") {
+		for _, collectorName := range strings.Split(c.ArgExchangeCollectorsEnabled, ",") {
 			if find(exchangeAllCollectorNames, collectorName) {
 				c.enabledCollectors = append(c.enabledCollectors, collectorName)
 			} else {
-				return nil, fmt.Errorf("Unknown exchange collector: %s", collectorName)
+				fmt.Errorf("Unknown exchange collector: %s", collectorName)
 			}
 		}
 	}
-
 	return &c, nil
 }
 
