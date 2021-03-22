@@ -1,4 +1,4 @@
-// +build ignore
+// +build windows
 
 package collector
 
@@ -14,18 +14,6 @@ import (
 	"github.com/prometheus/common/log"
 	"golang.org/x/sys/windows/registry"
 	"gopkg.in/alecthomas/kingpin.v2"
-)
-
-var (
-	mssqlEnabledCollectors = kingpin.Flag(
-		"collectors.mssql.classes-enabled",
-		"Comma-separated list of mssql WMI classes to use.").
-		Default(mssqlAvailableClassCollectors()).String()
-
-	mssqlPrintCollectors = kingpin.Flag(
-		"collectors.mssql.class-print",
-		"If true, print available mssql WMI classes and exit.  Only displays if the mssql collector is enabled.",
-	).Bool()
 )
 
 type mssqlInstancesType map[string]string
@@ -126,11 +114,35 @@ func mssqlGetPerfObjectName(sqlInstance string, collector string) string {
 }
 
 func init() {
-	registerCollector("mssql", NewMSSQLCollector)
+	registerCollectorWithConfig("mssql", func() Config {
+		return &MSSQLConfig{}
+	})
+}
+
+type MSSQLConfig struct {
+	MSSQLEnabledCollectors string
+	MSSQLPrintCollectors   bool
+}
+
+func (m *MSSQLConfig) RegisterKingpin(ka *kingpin.Application) {
+	ka.Flag(
+		"collectors.mssql.classes-enabled",
+		"Comma-separated list of mssql WMI classes to use.").
+		Default(mssqlAvailableClassCollectors()).StringVar(&m.MSSQLEnabledCollectors)
+
+	ka.Flag(
+		"collectors.mssql.class-print",
+		"If true, print available mssql WMI classes and exit.  Only displays if the mssql collector is enabled.",
+	).BoolVar(&m.MSSQLPrintCollectors)
+}
+
+func (m *MSSQLConfig) Build() (Collector, error) {
+	return NewMSSQLCollector(m)
 }
 
 // A MSSQLCollector is a Prometheus collector for various WMI Win32_PerfRawData_MSSQLSERVER_* metrics
 type MSSQLCollector struct {
+	enabled []string
 	// meta
 	mssqlScrapeDurationDesc *prometheus.Desc
 	mssqlScrapeSuccessDesc  *prometheus.Desc
@@ -388,11 +400,11 @@ type MSSQLCollector struct {
 }
 
 // NewMSSQLCollector ...
-func NewMSSQLCollector() (Collector, error) {
+func NewMSSQLCollector(c *MSSQLConfig) (Collector, error) {
 
 	const subsystem = "mssql"
 
-	enabled := expandEnabledChildCollectors(*mssqlEnabledCollectors)
+	enabled := expandEnabledChildCollectors(c.MSSQLEnabledCollectors)
 	mssqlInstances := getMSSQLInstances()
 	perfCounters := make([]string, 0, len(mssqlInstances)*len(enabled))
 	for instance := range mssqlInstances {
@@ -1793,8 +1805,9 @@ func NewMSSQLCollector() (Collector, error) {
 	}
 
 	mssqlCollector.mssqlCollectors = mssqlCollector.getMSSQLCollectors()
+	mssqlCollector.enabled = expandEnabledChildCollectors(c.MSSQLEnabledCollectors)
 
-	if *mssqlPrintCollectors {
+	if c.MSSQLPrintCollectors {
 		fmt.Printf("Available SQLServer Classes:\n")
 		for name := range mssqlCollector.mssqlCollectors {
 			fmt.Printf(" - %s\n", name)
@@ -1844,9 +1857,8 @@ func (c *MSSQLCollector) execute(ctx *ScrapeContext, name string, fn mssqlCollec
 func (c *MSSQLCollector) Collect(ctx *ScrapeContext, ch chan<- prometheus.Metric) error {
 	wg := sync.WaitGroup{}
 
-	enabled := expandEnabledChildCollectors(*mssqlEnabledCollectors)
 	for sqlInstance := range c.mssqlInstances {
-		for _, name := range enabled {
+		for _, name := range c.enabled {
 			function := c.mssqlCollectors[name]
 
 			wg.Add(1)
